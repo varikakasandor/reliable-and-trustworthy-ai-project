@@ -1,2 +1,2 @@
-./models
-./test_cases
+models/*
+test_cases/*
