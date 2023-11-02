@@ -1,16 +1,43 @@
 import argparse
 import torch
+from torch import nn
 
 from networks import get_network
 from utils.loading import parse_spec
+from abstract_transformers import *
 
 DEVICE = "cpu"
 
 
-def analyze(
-    net: torch.nn.Module, inputs: torch.Tensor, eps: float, true_label: int
-) -> bool:
-    return 0
+def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int) -> bool:
+    curr_lower_bounds = inputs.flatten() - eps
+    curr_upper_bounds = inputs.flatten() + eps
+    for name, layer in net.named_children():
+        if isinstance(layer, nn.Flatten):  # No need to do anything in this case
+            pass
+        elif isinstance(layer, nn.Linear):
+            weights = layer.weight
+            next_lower_bounds, next_upper_bounds = torch.zeros(weights.shape[0]), torch.zeros(weights.shape[0])
+            for i in range(weights.shape[0]):  # TODO: vectorise
+                for j in range(weights.shape[1]):
+                    if weights[i, j] >= 0:
+                        next_lower_bounds[i] += weights[i, j] * curr_lower_bounds[j]
+                        next_upper_bounds[i] += weights[i, j] * curr_upper_bounds[j]
+                    else:
+                        next_lower_bounds[i] += weights[i, j] * curr_upper_bounds[j]
+                        next_upper_bounds[i] += weights[i, j] * curr_lower_bounds[j]
+            curr_lower_bounds, curr_upper_bounds = next_lower_bounds, next_upper_bounds
+        else:
+            print(f"Layers of type {type(layer).__name__} are not yet supported")
+    highest_incorrect_prediction = None
+    for i in range(len(curr_upper_bounds)):
+        if i != true_label and (
+                highest_incorrect_prediction is None or curr_upper_bounds[i] > highest_incorrect_prediction):
+            highest_incorrect_prediction = curr_upper_bounds[i]
+    print(f"The category lower bounds are {curr_lower_bounds}")
+    print(f"The category upper bounds are {curr_upper_bounds}")
+    print(f"The correct category is {true_label}")
+    return curr_lower_bounds[true_label] > highest_incorrect_prediction
 
 
 def main():
@@ -45,7 +72,7 @@ def main():
 
     # print(args.spec)
 
-    net = get_network(args.net, dataset, f"models/{dataset}_{args.net}.pt").to(DEVICE)
+    net = get_network(args.net, dataset, f"../models/{dataset}_{args.net}.pt").to(DEVICE)  # TODO: remove the ../
 
     image = image.to(DEVICE)
     out = net(image.unsqueeze(0))
