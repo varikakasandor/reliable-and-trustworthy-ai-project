@@ -11,37 +11,55 @@ DEVICE = "cpu"
 
 def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int) -> bool:
 
+    # print layers in nn.sequential
     '''
-    curr_lower_bounds = inputs.flatten() - eps
-    curr_upper_bounds = inputs.flatten() + eps
     for name, layer in net.named_children():
-        if isinstance(layer, nn.Flatten):  # No need to do anything in this case
-            pass
+        print(name, layer)
+
+    return True
+
+
+    '''
+    print(eps)
+    eps = 1e-2
+
+    lower_bounds = inputs - eps
+    upper_bounds = inputs + eps
+    lower_bounds = torch.clamp(lower_bounds, min=0, max=1)
+    upper_bounds = torch.clamp(upper_bounds, min=0, max=1)
+
+    transfomers = []
+
+    for name, layer in net.named_children():
+        previous_transformer = transfomers[-1] if len(transfomers) > 0 else None
+        if isinstance(layer, nn.Flatten):
+            if len(transformers) == 0:
+                lower_bounds = lower_bounds.flatten()
+                upper_bounds = upper_bounds.flatten()
+                continue
+            else:
+                raise Exception("Flatten layer can only be the first layer in the network")
+
         elif isinstance(layer, nn.Linear):
-            weights = layer.weight
-            next_lower_bounds, next_upper_bounds = torch.zeros(weights.shape[0]), torch.zeros(weights.shape[0])
-            for i in range(weights.shape[0]):  # TODO: vectorise
-                for j in range(weights.shape[1]):
-                    if weights[i, j] >= 0:
-                        next_lower_bounds[i] += weights[i, j] * curr_lower_bounds[j]
-                        next_upper_bounds[i] += weights[i, j] * curr_upper_bounds[j]
-                    else:
-                        next_lower_bounds[i] += weights[i, j] * curr_upper_bounds[j]
-                        next_upper_bounds[i] += weights[i, j] * curr_lower_bounds[j]
-            curr_lower_bounds, curr_upper_bounds = next_lower_bounds, next_upper_bounds
+            transfomers.append(LinearTransformer(layer), previous_transformer)
+
+        elif isinstance(layer, nn.ReLU):
+            transfomers.append(ReLUTransformer(layer), previous_transformer)
+
         else:
             print(f"Layers of type {type(layer).__name__} are not yet supported")
-    highest_incorrect_prediction = None
-    for i in range(len(curr_upper_bounds)):
-        if i != true_label and (
-                highest_incorrect_prediction is None or curr_upper_bounds[i] > highest_incorrect_prediction):
-            highest_incorrect_prediction = curr_upper_bounds[i]
-    print(f"The category lower bounds are {curr_lower_bounds}")
-    print(f"The category upper bounds are {curr_upper_bounds}")
-    print(f"The correct category is {true_label}")
-    return curr_lower_bounds[true_label] > highest_incorrect_prediction
-    '''
 
+
+    for transformer in transfomers:
+        lower_bounds, upper_bounds = transformer.forward(lower_bounds, upper_bounds)
+    
+    print("True label:", true_label)
+    print("Lower bounds:", lower_bounds)
+    print("Upper bounds:", upper_bounds)
+
+    upper_bounds[true_label] = float('-inf')
+    largest_upper_bound = torch.max(upper_bounds)
+    return lower_bounds[true_label] > largest_upper_bound
 
 def main():
     parser = argparse.ArgumentParser(
