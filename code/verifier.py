@@ -28,10 +28,10 @@ def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int) -
     lower_bounds = torch.clamp(lower_bounds, min=0, max=1)
     upper_bounds = torch.clamp(upper_bounds, min=0, max=1)
 
-    transfomers = []
+    transformers = []
 
     for name, layer in net.named_children():
-        previous_transformer = transfomers[-1] if len(transfomers) > 0 else None
+        previous_transformer = transformers[-1] if len(transformers) > 0 else None
         if isinstance(layer, nn.Flatten):
             if len(transformers) == 0:
                 lower_bounds = lower_bounds.flatten()
@@ -41,16 +41,16 @@ def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int) -
                 raise Exception("Flatten layer can only be the first layer in the network")
 
         elif isinstance(layer, nn.Linear):
-            transfomers.append(LinearTransformer(layer), previous_transformer)
+            transformers.append(LinearTransformer(layer, previous_transformer))
 
         elif isinstance(layer, nn.ReLU):
-            transfomers.append(ReLUTransformer(layer), previous_transformer)
+            transformers.append(ReLUTransformer(layer, previous_transformer))
 
         else:
             print(f"Layers of type {type(layer).__name__} are not yet supported")
 
 
-    for transformer in transfomers:
+    for transformer in transformers:
         lower_bounds, upper_bounds = transformer.forward(lower_bounds, upper_bounds)
     
     print("True label:", true_label)
