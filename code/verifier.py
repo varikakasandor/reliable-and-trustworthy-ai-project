@@ -10,6 +10,8 @@ DEVICE = "cpu"
 
 
 def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int) -> bool:
+
+    '''
     curr_lower_bounds = inputs.flatten() - eps
     curr_upper_bounds = inputs.flatten() + eps
     for name, layer in net.named_children():
@@ -38,6 +40,7 @@ def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int) -
     print(f"The category upper bounds are {curr_upper_bounds}")
     print(f"The correct category is {true_label}")
     return curr_lower_bounds[true_label] > highest_incorrect_prediction
+    '''
 
 
 def main():
@@ -72,7 +75,7 @@ def main():
 
     # print(args.spec)
 
-    net = get_network(args.net, dataset, f"../models/{dataset}_{args.net}.pt").to(DEVICE)  # TODO: remove the ../
+    net = get_network(args.net, dataset, f"models/{dataset}_{args.net}.pt").to(DEVICE)  # TODO: remove the ../
 
     image = image.to(DEVICE)
     out = net(image.unsqueeze(0))
