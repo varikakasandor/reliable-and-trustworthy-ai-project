@@ -5,6 +5,7 @@ from torch import nn
 from networks import get_network
 from utils.loading import parse_spec
 from abstract_transformers import *
+from deeppoly import DeepPoly
 
 DEVICE = "cpu"
 
@@ -21,12 +22,15 @@ def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int) -
 
     '''
     print(eps)
-    eps = 1e-2
 
-    lower_bounds = inputs - eps
-    upper_bounds = inputs + eps
-    lower_bounds = torch.clamp(lower_bounds, min=0, max=1)
-    upper_bounds = torch.clamp(upper_bounds, min=0, max=1)
+    deeppoly = DeepPoly(net, inputs, eps, true_label)
+    return deeppoly.run_deeppoly()
+
+    '''
+    lb = inputs - eps
+    ub = inputs + eps
+    lb = torch.clamp(lb, min=0, max=1)
+    ub = torch.clamp(ub, min=0, max=1)
 
     transformers = []
 
@@ -34,13 +38,15 @@ def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int) -
         previous_transformer = transformers[-1] if len(transformers) > 0 else None
         if isinstance(layer, nn.Flatten):
             if len(transformers) == 0:
-                lower_bounds = lower_bounds.flatten()
-                upper_bounds = upper_bounds.flatten()
+                lb = lb.flatten()
+                ub = ub.flatten()
                 continue
             else:
                 raise Exception("Flatten layer can only be the first layer in the network")
 
         elif isinstance(layer, nn.Linear):
+            print(layer.weight.shape)
+            print(layer.bias.shape)
             transformers.append(LinearTransformer(layer, previous_transformer))
 
         elif isinstance(layer, nn.ReLU):
@@ -51,16 +57,17 @@ def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int) -
 
 
     for transformer in transformers:
-        lower_bounds, upper_bounds = transformer.forward(lower_bounds, upper_bounds)
+        lb, ub = transformer.forward(lb, ub)
     
     print("True label:", true_label)
-    print("Lower bounds:", lower_bounds)
-    print("Upper bounds:", upper_bounds)
+    print("Lower bounds:", lb)
+    print("Upper bounds:", ub)
 
-    upper_bounds[true_label] = float('-inf')
-    largest_upper_bound = torch.max(upper_bounds)
-    return lower_bounds[true_label] > largest_upper_bound
-
+    ub[true_label] = float('-inf')
+    largest_upper_bound = torch.max(ub)
+    return lb[true_label] > largest_upper_bound
+    '''
+    
 def main():
     parser = argparse.ArgumentParser(
         description="Neural network verification using DeepPoly relaxation."
