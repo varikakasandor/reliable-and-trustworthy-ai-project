@@ -51,6 +51,9 @@ def attack(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int) ->
         assert check_region(inputs, x_adv, eps)
         out = net(x_adv.unsqueeze(0))
         if out.max(dim=1)[1].item() != true_label:
+            print(torch.abs(x_adv - inputs))
+            print(out)
+            print(torch.max(torch.abs(inputs - x_adv)))
             return True
     
     return False
