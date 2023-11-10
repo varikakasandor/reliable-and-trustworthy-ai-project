@@ -61,18 +61,19 @@ class DeepPoly:
         # layers are backsubstituted at least until the layer with depth = backsub_depth
         # and with no backsubstitution this is the penultimate layer (-2 due to InputTransformer)
         self.backsub_depth = self.num_layers - 2
+
         
 
     def verify(self) -> bool:
 
-        final_transformer = self.transformers[-1]
-        final_lb = final_transformer.lb
-        final_ub = final_transformer.ub
+        self.final_transformer = self.transformers[-1]
+        self.final_lb = self.final_transformer.lb
+        self.final_ub = self.final_transformer.ub
 
         print(f"True label: {self.true_label}")
-        print(f"Lower bounds: {final_lb}")
+        print(f"Lower bounds: {self.final_lb}")
 
-        verified = bool(torch.all(final_lb >= 0))
+        verified = bool(torch.all(self.final_lb >= 0))
         print(f"Verified: {verified}\n")
         return verified
 
@@ -85,9 +86,9 @@ class DeepPoly:
             try_string = f"Trying to verify with backsub depth: {self.backsub_depth}"
             print(try_string)
             print("-"*len(try_string) + "\n")
-            
+
             for transformer in self.transformers:
-                print(f"Calculating: {transformer}")
+                #print(f"Calculating: {transformer}")
                 transformer.backsub_depth = self.backsub_depth
                 transformer.calculate()
             
@@ -96,6 +97,41 @@ class DeepPoly:
                 break
 
             self.backsub_depth -= 1
+
+        self.backsub_depth = 0
+
+        if not verified:
+            # then try optimizing slopes of relus using gradient descent
+            print("Trying to optimize relu slopes")
+
+            self.optimizer = torch.optim.Adam([transformer.alphas for transformer in self.transformers if isinstance(transformer, ReLUTransformer)], lr=0.01)
+
+            n_epochs = 1000
+
+            for epoch in range(n_epochs):
+                self.optimizer.zero_grad()
+                self.max_diff = torch.sum(torch.relu(-self.final_lb))
+                self.max_diff.backward(retain_graph=True)
+                # print grads
+                for transformer in self.transformers:
+                    if isinstance(transformer, ReLUTransformer):
+                        #print(f"Relu Slopes: {transformer.alphas}")
+                        #print(f"Relu Grads: {transformer.alphas.grad}")
+                        pass
+
+                self.optimizer.step()
+
+                for transformer in self.transformers:
+                    if isinstance(transformer, ReLUTransformer):
+                        transformer.alphas.data.clamp_(min=0, max=1)
+
+                for transformer in self.transformers:
+                    transformer.calculate()
+
+                verified = self.verify()
+                if verified:
+                    break
+
         
         return verified
 
