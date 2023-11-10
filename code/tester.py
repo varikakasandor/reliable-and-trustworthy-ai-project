@@ -84,6 +84,7 @@ def test2():
 
 def test3():
     # example from the course slides
+    # make sure to comment the clamping part in InputTransformer
 
     inputs = torch.tensor([0, 0], dtype=torch.float)
     eps = 1
