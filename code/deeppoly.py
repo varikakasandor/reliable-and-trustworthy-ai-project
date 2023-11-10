@@ -13,9 +13,12 @@ class DeepPoly:
         self.eps = eps
         self.true_label = true_label
 
-        self.transformers = []
+        # we have an abstract transformer for each layer
+        self.transformers: List[AbstractTransformer] = []
 
         for name, layer in net.named_children():
+
+            print(name, layer)
 
             if len(self.transformers) == 0:
                 if isinstance(layer, nn.Flatten):
@@ -36,22 +39,29 @@ class DeepPoly:
             else:
                 print(f"Layers of type {type(layer).__name__} are not yet supported")
 
-        self.num_layers = len(self.transformers)
+        print()
+        # add a final linear layer to be able to backsubstitue the difference between x_{true_label} - x_i for all i \neq true_label
+        out = self.net(self.inputs.unsqueeze(0))
+        num_classes = out.shape[1]
 
-    def run_deeppoly(self):
+        final_linear = nn.Linear(num_classes, num_classes)
+        final_linear.bias = nn.Parameter(torch.zeros(num_classes))
+        final_linear.bias.requires_grad = False
+        weight_matrix = -1*torch.eye(num_classes)
+        weight_matrix[:, true_label] += 1
+        #print(weight_matrix)
+        final_linear.weight = nn.Parameter(weight_matrix)
+        final_linear.weight.requires_grad = False
+        final_linear.eval()
+        final_transformer = LinearTransformer(final_linear, self.transformers[-1], len(self.transformers))
         
-        verified = False
-        backsub_complete = False
-        while not verified and not backsub_complete:
-            backsub_complete = True
-            for transformer in self.transformers:
-                transformer.backsub_depth = max(0, transformer.backsub_depth - 1)
-                backsub_complete = False if transformer.backsub_depth > 0 else backsub_complete
-                transformer.calculate()
-            
-            verified = self.verify()
+        self.transformers.append(final_transformer)
+
+        self.num_layers = len(self.transformers)
+        # layers are backsubstituted at least until the layer with depth = backsub_depth
+        # and with no backsubstitution this is the penultimate layer (-2 due to InputTransformer)
+        self.backsub_depth = self.num_layers - 2
         
-        return verified
 
     def verify(self) -> bool:
 
@@ -59,14 +69,34 @@ class DeepPoly:
         final_lb = final_transformer.lb
         final_ub = final_transformer.ub
 
-        print("True label:", self.true_label)
-        print("Lower bounds:", final_lb)
-        print("Upper bounds:", final_ub)
+        print(f"True label: {self.true_label}")
+        print(f"Lower bounds: {final_lb}")
 
-        final_ub[self.true_label] = float('-inf')
-        largest_upper_bound = torch.max(final_ub)
-        verified = final_lb[self.true_label] > largest_upper_bound
-        print("Verified:", verified)
-        return bool(verified)
+        verified = bool(torch.all(final_lb >= 0))
+        print(f"Verified: {verified}\n")
+        return verified
+
+    def run(self, backsub = True) -> bool:
+        
+        # try to verify - if we can't, backsub every layer by 1 and try again
+        verified = False
+        while not verified and not self.backsub_depth < 0:
+
+            try_string = f"Trying to verify with backsub depth: {self.backsub_depth}"
+            print(try_string)
+            print("-"*len(try_string) + "\n")
+            
+            for transformer in self.transformers:
+                print(f"Calculating: {transformer}")
+                transformer.backsub_depth = self.backsub_depth
+                transformer.calculate()
+            
+            verified = self.verify()
+            if not backsub:
+                break
+
+            self.backsub_depth -= 1
+        
+        return verified
 
     
