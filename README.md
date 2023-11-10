@@ -56,6 +56,11 @@ To test your verifier, you can run, for example:
 ```bash
 $ python code/verifier.py --net fc_1 --spec test_cases/fc_1/img0_mnist_0.1394.txt
 ```
+To run an attack, you can run, for example:
+
+```bash
+$ python code/attacker.py --net fc_base --spec test_cases/fc_base/img0_mnist_0.2456.txt
+```
 
 To evaluate the verifier on all networks and sample test cases, we provide an evaluation script.
 You can run this script from the root directory using the following commands:
