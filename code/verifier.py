@@ -72,9 +72,7 @@ def non_console_main(net, spec, n_epochs=1000, print_debug=True):
     main_body(model_config, n_epochs=n_epochs, print_debug=print_debug)
 
 
-def run_all_test_cases(forbidden_networks):
-    if forbidden_networks is None:
-        forbidden_networks = ["conv"]
+def run_all_test_cases(forbidden_networks=("conv",)):
     current_file_path = Path(__file__).resolve()
     parent_directory = current_file_path.parent.parent
     test_cases_folder = parent_directory / 'test_cases'
@@ -84,11 +82,11 @@ def run_all_test_cases(forbidden_networks):
                 if "cifar" not in file_path.name:  # TODO: make it work for CIFAR as well, idk what the issue is
                     relative_file_path = f"../test_cases/{folder_path.name}/{file_path.name}"
                     print(relative_file_path)
-                    non_console_main(folder_path.name, relative_file_path, n_epochs=100, print_debug=False)
+                    non_console_main(folder_path.name, relative_file_path, n_epochs=200, print_debug=False)
                     attack_non_console_main(folder_path.name, relative_file_path, n_epochs=100, print_debug=False)
 
 
 if __name__ == "__main__":
-    # main()
-    run_all_test_cases(
-        forbidden_networks=["conv", "fc_1", "fc_2", "fc_3", "fc_4", "fc_5", "fc_base"])  # the early fc-s are easier
+    # non_console_main("fc_2", "../test_cases/fc_2/img3_mnist_0.0639.txt", print_debug=True, n_epochs=5)
+    main()
+    # run_all_test_cases()

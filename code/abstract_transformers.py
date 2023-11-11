@@ -31,6 +31,9 @@ class AbstractTransformer:
         # the depth of the layer we are backsubstituting into
         self.backsub_depth = None
 
+        # this is only used for ReLU and LeakyReLU
+        self.alphas = None
+
     def calculate(self):
         pass
 

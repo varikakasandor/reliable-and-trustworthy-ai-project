@@ -1,5 +1,5 @@
 from abstract_transformers import *
-
+from torchviz import make_dot
 
 class DeepPoly:
 
@@ -65,16 +65,11 @@ class DeepPoly:
         self.backsub_depth = self.num_layers - 2
 
     def verify(self) -> bool:
-
-        self.final_transformer = self.transformers[-1]
-        self.final_lb = self.final_transformer.lb
-        self.final_ub = self.final_transformer.ub
-
         if self.print_debug:
             print(f"True label: {self.true_label}")
-            print(f"Lower bounds: {self.final_lb}")
+            print(f"Lower bounds: {self.transformers[-1].lb}")
 
-        verified = bool(torch.all(self.final_lb >= 0))
+        verified = bool(torch.all(self.transformers[-1].lb >= 0))
         if self.print_debug:
             print(f"Verified: {verified}\n")
         return verified
@@ -90,10 +85,13 @@ class DeepPoly:
                 print(try_string)
                 print("-" * len(try_string) + "\n")
 
-            for transformer in self.transformers:
-                # print(f"Calculating: {transformer}")
-                transformer.backsub_depth = self.backsub_depth
-                transformer.calculate()
+            with torch.autograd.no_grad():
+                for transformer in self.transformers[:-1]:
+                    transformer.backsub_depth = self.backsub_depth
+                    transformer.calculate()
+
+            self.transformers[-1].backsub_depth = self.backsub_depth
+            self.transformers[-1].calculate()
 
             verified = self.verify()
             if not backsub:
@@ -102,29 +100,25 @@ class DeepPoly:
             self.backsub_depth -= 1
 
         self.backsub_depth = 0
-        classes_to_optimize = (ReLUTransformer, LeakyReLUTransformer)
-        if not verified and any(isinstance(layers, classes_to_optimize) for layers in self.transformers):
-            # then try optimizing slopes of (leaky) relus using gradient descent
+
+        # then try optimizing slopes of (leaky) relus using gradient descent
+        layer_types_to_optimise = (ReLUTransformer, LeakyReLUTransformer)
+        if not verified and any(isinstance(layers, layer_types_to_optimise) for layers in self.transformers):
             if self.print_debug:
                 print("Trying to optimize (leaky) relu slopes")
-
             self.optimizer = torch.optim.Adam(
                 [transformer.alphas for transformer in self.transformers if
-                 isinstance(transformer, classes_to_optimize)],
+                 isinstance(transformer, layer_types_to_optimise)],
                 lr=0.01)
-
             for epoch in range(n_epochs):
-                self.optimizer.zero_grad()
-                self.sum_diff = torch.sum(torch.relu(-self.final_lb))
+                self.sum_diff = torch.sum(torch.relu(-self.transformers[-1].lb))
                 self.sum_diff.backward(retain_graph=True)
-                # print grads
-                for transformer in self.transformers:
-                    if isinstance(transformer, classes_to_optimize):
-                        # print(f"Relu Slopes: {transformer.alphas}")
-                        # print(f"Relu Grads: {transformer.alphas.grad}")
-                        pass
-
+                if epoch == 0 and self.print_debug:
+                    dot = make_dot(self.sum_diff, params={str(idx): transformer.alphas for idx, transformer in enumerate(self.transformers) if
+                     isinstance(transformer, layer_types_to_optimise)})
+                    dot.render("./diagnostic_plots/computational_graph", format="png", cleanup=True)
                 self.optimizer.step()
+                self.optimizer.zero_grad()
 
                 for transformer in self.transformers:
                     if isinstance(transformer, ReLUTransformer):
@@ -135,8 +129,10 @@ class DeepPoly:
                         else:
                             transformer.alphas.data.clamp_(min=1, max=transformer.negative_slope)
 
-                for transformer in self.transformers:
-                    transformer.calculate()
+                with torch.autograd.no_grad():
+                    for transformer in self.transformers[:-1]:
+                        transformer.calculate()
+                self.transformers[-1].calculate()
 
                 verified = self.verify()
                 if verified:
