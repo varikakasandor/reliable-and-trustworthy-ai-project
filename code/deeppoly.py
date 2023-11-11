@@ -3,7 +3,9 @@ from abstract_transformers import *
 
 class DeepPoly:
 
-    def __init__(self, net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int):
+    def __init__(self, net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int, print_debug=True):
+
+        self.print_debug = print_debug
 
         self.net = net
         self.inputs = inputs
@@ -14,8 +16,8 @@ class DeepPoly:
         self.transformers: List[AbstractTransformer] = []
 
         for name, layer in net.named_children():
-
-            print(name, layer)
+            if self.print_debug:
+                print(name, layer)
 
             if len(self.transformers) == 0:
                 if isinstance(layer, nn.Flatten):
@@ -32,6 +34,7 @@ class DeepPoly:
 
             elif isinstance(layer, nn.ReLU):
                 self.transformers.append(ReLUTransformer(layer, self.transformers[-1], len(self.transformers)))
+                # "layer" is not used here, as ReLU is non-parameteric
 
             elif isinstance(layer, nn.LeakyReLU):
                 self.transformers.append(LeakyReLUTransformer(layer, self.transformers[-1], len(self.transformers)))
@@ -39,7 +42,6 @@ class DeepPoly:
             else:
                 print(f"Layers of type {type(layer).__name__} are not yet supported")
 
-        print()
         # add a final linear layer to be able to backsubstitue the difference between x_{true_label} - x_i for all i
         # \neq true_label
         out = self.net(self.inputs.unsqueeze(0))
@@ -69,22 +71,25 @@ class DeepPoly:
         self.final_lb = self.final_transformer.lb
         self.final_ub = self.final_transformer.ub
 
-        print(f"True label: {self.true_label}")
-        print(f"Lower bounds: {self.final_lb}")
+        if self.print_debug:
+            print(f"True label: {self.true_label}")
+            print(f"Lower bounds: {self.final_lb}")
 
         verified = bool(torch.all(self.final_lb >= 0))
-        print(f"Verified: {verified}\n")
+        if self.print_debug:
+            print(f"Verified: {verified}\n")
         return verified
 
-    def run(self, backsub=True) -> bool:
+    def run(self, n_epochs=1000, backsub=True) -> bool:
 
         # try to verify - if we can't, backsub every layer by 1 and try again
         verified = False
         while not verified and not self.backsub_depth < 0:
 
             try_string = f"Trying to verify with backsub depth: {self.backsub_depth}"
-            print(try_string)
-            print("-" * len(try_string) + "\n")
+            if self.print_debug:
+                print(try_string)
+                print("-" * len(try_string) + "\n")
 
             for transformer in self.transformers:
                 # print(f"Calculating: {transformer}")
@@ -98,16 +103,16 @@ class DeepPoly:
             self.backsub_depth -= 1
 
         self.backsub_depth = 0
-
-        if not verified:
-            # then try optimizing slopes of relus using gradient descent
-            print("Trying to optimize relu slopes")
+        classes_to_optimize = (ReLUTransformer, LeakyReLUTransformer)
+        if not verified and any(isinstance(layers, classes_to_optimize) for layers in self.transformers):
+            # then try optimizing slopes of (leaky) relus using gradient descent
+            if self.print_debug:
+                print("Trying to optimize (leaky) relu slopes")
 
             self.optimizer = torch.optim.Adam(
-                [transformer.alphas for transformer in self.transformers if isinstance(transformer, ReLUTransformer)],
+                [transformer.alphas for transformer in self.transformers if
+                 isinstance(transformer, classes_to_optimize)],
                 lr=0.01)
-
-            n_epochs = 1000
 
             for epoch in range(n_epochs):
                 self.optimizer.zero_grad()
@@ -115,7 +120,7 @@ class DeepPoly:
                 self.sum_diff.backward(retain_graph=True)
                 # print grads
                 for transformer in self.transformers:
-                    if isinstance(transformer, ReLUTransformer):
+                    if isinstance(transformer, classes_to_optimize):
                         # print(f"Relu Slopes: {transformer.alphas}")
                         # print(f"Relu Grads: {transformer.alphas.grad}")
                         pass
@@ -123,7 +128,7 @@ class DeepPoly:
                 self.optimizer.step()
 
                 for transformer in self.transformers:
-                    if isinstance(transformer, ReLUTransformer):
+                    if isinstance(transformer, classes_to_optimize):
                         transformer.alphas.data.clamp_(min=0, max=1)
 
                 for transformer in self.transformers:

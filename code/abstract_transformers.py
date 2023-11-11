@@ -148,7 +148,6 @@ class ReLUTransformer(AbstractTransformer):
     def __init__(self, module: nn.ReLU, previous_transformer: AbstractTransformer, depth: int):
 
         super().__init__()
-        self.module = module
         self.equation_transformer = previous_transformer
         self.previous_transformer = previous_transformer
         self.depth = depth
@@ -249,16 +248,78 @@ class LeakyReLUTransformer(AbstractTransformer):
 
     def __init__(self, module: nn.LeakyReLU, previous_transformer: AbstractTransformer, depth: int):
         super().__init__()
-        self.module = module
+        self.negative_slope = 1.0 * module.negative_slope  # always positive (!), two different cases <1 and >=1
         self.equation_transformer = previous_transformer
         self.previous_transformer = previous_transformer
         self.depth = depth
         self.backsub_depth = depth
-
         self.alphas = None
 
     def calculate(self):
-        pass
+        lb = self.previous_transformer.lb
+        ub = self.previous_transformer.ub
+
+        crossing = (lb < 0) & (ub > 0)
+        negative = (ub <= 0)
+        positive = (lb >= 0)
+
+        lmbda = (ub - self.negative_slope * lb) / (ub - lb)  # TODO: think if ub=lb can happen and deal with that
+        if self.alphas is None:
+            self.alphas = torch.full(lb.shape, self.negative_slope, requires_grad=True)
+            # initialize self.alphas uniformly random between self.negative_slope and 1
+            # (or 1 and self.negative_slope whatever is non-empty)
+            # self.alphas = (1 + self.negative_slope) * torch.rand(lb.shape) - self.negative_slope
+            # self.alphas.requires_grad_()
+            # TODO: make random init work with autograd
+
+        self.ub_weights = negative.int() * torch.full(ub.shape, self.negative_slope) + positive.int() * torch.ones(
+            ub.shape) + crossing.int() * lmbda
+        self.ub_weights = torch.diag(self.ub_weights)
+        self.ub_bias = crossing.int() * (lb * ub * (self.negative_slope - 1) / (ub - lb))
+
+        self.lb_weights = negative.int() * torch.full(ub.shape, self.negative_slope) + positive.int() * torch.ones(
+            ub.shape) + crossing.int() * self.alphas
+        self.lb_weights = torch.diag(self.lb_weights)
+        self.lb_bias = torch.zeros(lb.shape)
+        if 1 < self.negative_slope: # if slope is bigger than 1 then upper and lower bound lines are swapped
+            self.ub_weights, self.ub_bias, self.lb_weights, self.lb_bias = self.lb_weights, self.lb_bias, self.ub_weights, self.ub_bias
+
+        # try getting bounds without redoing backsubstitution again (this likely never gives improvement)
+        self.lb = self.lb_weights @ lb + self.lb_bias
+        self.ub = self.ub_weights @ ub + self.ub_bias
+
+        self.lb = torch.max(self.lb, torch.zeros(self.lb.shape))
+
+        # we backsub recursively until we reach the layer we are backsubstituting into
+        if self.backsub_depth < self.previous_transformer.depth:
+            (self.equation_transformer,
+             self.equation_ub_weights,
+             self.equation_lb_weights,
+             self.equation_ub_bias,
+             self.equation_lb_bias) = self.previous_transformer.backward(self.ub_weights,
+                                                                         self.lb_weights,
+                                                                         self.ub_bias,
+                                                                         self.lb_bias,
+                                                                         self.backsub_depth)
+        else:
+            self.equation_transformer = self.previous_transformer
+            self.equation_ub_weights = self.ub_weights
+            self.equation_lb_weights = self.lb_weights
+            self.equation_ub_bias = self.ub_bias
+            self.equation_lb_bias = self.lb_bias
+
+        lb = self.equation_transformer.lb
+        ub = self.equation_transformer.ub
+
+        # use previous upper bound and lower bound for positive weights, otherwise swap
+        positive_ub_weights = (self.equation_ub_weights >= 0).int() * self.equation_ub_weights
+        negative_ub_weights = (self.equation_ub_weights < 0).int() * self.equation_ub_weights
+
+        positive_lb_weights = (self.equation_lb_weights >= 0).int() * self.equation_lb_weights
+        negative_lb_weights = (self.equation_lb_weights < 0).int() * self.equation_lb_weights
+
+        self.lb = torch.max(positive_lb_weights @ lb + negative_lb_weights @ ub + self.equation_lb_bias, self.lb)
+        self.ub = torch.min(positive_ub_weights @ ub + negative_ub_weights @ lb + self.equation_ub_bias, self.ub)
 
     def backward(self,
                  ub_weights: torch.Tensor,
@@ -267,4 +328,21 @@ class LeakyReLUTransformer(AbstractTransformer):
                  lb_bias: torch.Tensor,
                  backsub_depth: int) -> Tuple[
         AbstractTransformer, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        pass
+        positive_ub_weights = (ub_weights >= 0).int() * ub_weights
+        negative_ub_weights = (ub_weights < 0).int() * ub_weights
+
+        positive_lb_weights = (lb_weights >= 0).int() * lb_weights
+        negative_lb_weights = (lb_weights < 0).int() * lb_weights
+
+        new_ub_bias = ub_bias + positive_ub_weights @ self.ub_bias + negative_ub_weights @ self.lb_bias
+        new_lb_bias = lb_bias + positive_lb_weights @ self.lb_bias + negative_lb_weights @ self.ub_bias
+
+        new_ub_weights = positive_ub_weights @ self.ub_weights + negative_ub_weights @ self.lb_weights
+        new_lb_weights = positive_lb_weights @ self.lb_weights + negative_lb_weights @ self.ub_weights
+
+        if backsub_depth >= self.previous_transformer.depth:
+            return self.previous_transformer, new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias
+        else:
+            return self.previous_transformer.backward(new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias,
+                                                      backsub_depth)
+

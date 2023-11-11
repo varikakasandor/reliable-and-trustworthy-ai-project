@@ -1,16 +1,41 @@
 import argparse
+from collections import namedtuple
+from pathlib import Path
 
 from abstract_transformers import *
 from deeppoly import DeepPoly
 from networks import get_network
 from utils.loading import parse_spec
 
+ModelConfig = namedtuple('ModelConfig', ['spec', 'net'])
+
 DEVICE = "cpu"
 
 
-def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int) -> bool:
-    deeppoly = DeepPoly(net, inputs, eps, true_label)
-    return deeppoly.run()
+def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int, n_epochs: int, print_debug: bool) -> bool:
+    deeppoly = DeepPoly(net, inputs, eps, true_label, print_debug=print_debug)
+    return deeppoly.run(n_epochs = n_epochs)
+
+
+def main_body(parser_args, n_epochs=1000, print_debug=True):
+    print(parser_args)
+    true_label, dataset, image, eps = parse_spec(parser_args.spec)
+
+    # print(args.spec)
+
+    net = get_network(parser_args.net, dataset, f"../models/{dataset}_{parser_args.net}.pt").to(
+        DEVICE)  # TODO: remove the ../
+
+    image = image.to(DEVICE)
+    out = net(image.unsqueeze(0))
+
+    pred_label = out.max(dim=1)[1].item()
+    assert pred_label == true_label
+
+    if analyze(net, image, eps, true_label, n_epochs=n_epochs, print_debug=print_debug):
+        print("verified")
+    else:
+        print("not verified")
 
 
 def main():
@@ -40,24 +65,25 @@ def main():
     )
     parser.add_argument("--spec", type=str, required=True, help="Test case to verify.")
     args = parser.parse_args()
+    main_body(args)
 
-    true_label, dataset, image, eps = parse_spec(args.spec)
 
-    # print(args.spec)
+def non_console_main(net, spec, n_epochs=1000, print_debug=True):
+    model_config = ModelConfig(spec=spec, net=net)
+    main_body(model_config, n_epochs = n_epochs, print_debug=print_debug)
 
-    net = get_network(args.net, dataset, f"../models/{dataset}_{args.net}.pt").to(DEVICE)  # TODO: remove the ../
 
-    image = image.to(DEVICE)
-    out = net(image.unsqueeze(0))
-
-    pred_label = out.max(dim=1)[1].item()
-    assert pred_label == true_label
-
-    if analyze(net, image, eps, true_label):
-        print("verified")
-    else:
-        print("not verified")
+def run_all_test_cases():
+    current_file_path = Path(__file__).resolve()
+    parent_directory = current_file_path.parent.parent
+    test_cases_folder = parent_directory / 'test_cases'
+    for folder_path in test_cases_folder.iterdir():
+        if folder_path.is_dir() and "conv" not in folder_path.name:
+            for file_path in folder_path.glob("*.txt"):
+                relative_file_path = f"../test_cases/{folder_path.name}/{file_path.name}"
+                non_console_main(folder_path.name, relative_file_path, n_epochs=20, print_debug=False)
 
 
 if __name__ == "__main__":
     main()
+    # run_all_test_cases()

@@ -91,7 +91,7 @@ def main():
 
     # print(args.spec)
 
-    net = get_network(args.net, dataset, f"models/{dataset}_{args.net}.pt").to(DEVICE)  # TODO: remove the ../
+    net = get_network(args.net, dataset, f"../models/{dataset}_{args.net}.pt").to(DEVICE)  # TODO: remove the ../
     net = net.eval()
 
     image = image.to(DEVICE)
