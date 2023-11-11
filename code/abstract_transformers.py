@@ -112,15 +112,8 @@ class LinearTransformer(AbstractTransformer):
         positive_lb_weights = (self.equation_lb_weights >= 0).int() * self.equation_lb_weights
         negative_lb_weights = (self.equation_lb_weights < 0).int() * self.equation_lb_weights
 
-        if self.lb is None:
-            self.lb = positive_lb_weights @ lb + negative_lb_weights @ ub + self.equation_lb_bias
-        else:
-            self.lb = torch.max(self.lb, positive_lb_weights @ lb + negative_lb_weights @ ub + self.equation_lb_bias)
-
-        if self.ub is None:
-            self.ub = positive_ub_weights @ ub + negative_ub_weights @ lb + self.equation_ub_bias
-        else:
-            self.ub = torch.min(self.ub, positive_ub_weights @ ub + negative_ub_weights @ lb + self.equation_ub_bias)
+        self.lb = positive_lb_weights @ lb + negative_lb_weights @ ub + self.equation_lb_bias
+        self.ub = positive_ub_weights @ ub + negative_ub_weights @ lb + self.equation_ub_bias
 
     def backward(self,
                  ub_weights: torch.Tensor,
@@ -178,12 +171,6 @@ class ReLUTransformer(AbstractTransformer):
         self.lb_weights = torch.diag(self.lb_weights)
         self.lb_bias = torch.zeros(lb.shape)
 
-        # try getting bounds without redoing backsubstitution again (this likely never gives improvement)
-        self.lb = self.lb_weights @ lb + self.lb_bias
-        self.ub = self.ub_weights @ ub + self.ub_bias
-
-        self.lb = torch.max(self.lb, torch.zeros(self.lb.shape))
-
         # we backsub recursively until we reach the layer we are backsubstituting into
         if self.backsub_depth < self.previous_transformer.depth:
             (self.equation_transformer,
@@ -212,8 +199,8 @@ class ReLUTransformer(AbstractTransformer):
         positive_lb_weights = (self.equation_lb_weights >= 0).int() * self.equation_lb_weights
         negative_lb_weights = (self.equation_lb_weights < 0).int() * self.equation_lb_weights
 
-        self.lb = torch.max(positive_lb_weights @ lb + negative_lb_weights @ ub + self.equation_lb_bias, self.lb)
-        self.ub = torch.min(positive_ub_weights @ ub + negative_ub_weights @ lb + self.equation_ub_bias, self.ub)
+        self.lb = positive_lb_weights @ lb + negative_lb_weights @ ub + self.equation_lb_bias
+        self.ub = positive_ub_weights @ ub + negative_ub_weights @ lb + self.equation_ub_bias
 
     def backward(self,
                  ub_weights: torch.Tensor,
@@ -284,12 +271,6 @@ class LeakyReLUTransformer(AbstractTransformer):
         if 1 < self.negative_slope:  # if slope is bigger than 1 then upper and lower bound lines are swapped
             self.ub_weights, self.ub_bias, self.lb_weights, self.lb_bias = self.lb_weights, self.lb_bias, self.ub_weights, self.ub_bias
 
-        # try getting bounds without redoing backsubstitution again (this likely never gives improvement)
-        self.lb = self.lb_weights @ lb + self.lb_bias
-        self.ub = self.ub_weights @ ub + self.ub_bias
-
-        self.lb = torch.max(self.lb, torch.zeros(self.lb.shape))
-
         # we backsub recursively until we reach the layer we are backsubstituting into
         if self.backsub_depth < self.previous_transformer.depth:
             (self.equation_transformer,
@@ -318,8 +299,8 @@ class LeakyReLUTransformer(AbstractTransformer):
         positive_lb_weights = (self.equation_lb_weights >= 0).int() * self.equation_lb_weights
         negative_lb_weights = (self.equation_lb_weights < 0).int() * self.equation_lb_weights
 
-        self.lb = torch.max(positive_lb_weights @ lb + negative_lb_weights @ ub + self.equation_lb_bias, self.lb)
-        self.ub = torch.min(positive_ub_weights @ ub + negative_ub_weights @ lb + self.equation_ub_bias, self.ub)
+        self.lb = positive_lb_weights @ lb + negative_lb_weights @ ub + self.equation_lb_bias
+        self.ub = positive_ub_weights @ ub + negative_ub_weights @ lb + self.equation_ub_bias
 
     def backward(self,
                  ub_weights: torch.Tensor,
