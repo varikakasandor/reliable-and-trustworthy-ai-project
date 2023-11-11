@@ -1,15 +1,12 @@
 import argparse
-from collections import namedtuple
 from pathlib import Path
 
 from abstract_transformers import *
 from deeppoly import DeepPoly
 from networks import get_network
+from utils.general import *
 from utils.loading import parse_spec
-
-ModelConfig = namedtuple('ModelConfig', ['spec', 'net'])
-
-DEVICE = "cpu"
+from attacker import attack_non_console_main
 
 
 def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int, n_epochs: int, print_debug: bool) -> bool:
@@ -18,7 +15,8 @@ def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int, n
 
 
 def main_body(parser_args, n_epochs=1000, print_debug=True):
-    print(parser_args)
+    if print_debug:
+        print(parser_args)
     true_label, dataset, image, eps = parse_spec(parser_args.spec)
 
     # print(args.spec)
@@ -33,9 +31,9 @@ def main_body(parser_args, n_epochs=1000, print_debug=True):
     assert pred_label == true_label
 
     if analyze(net, image, eps, true_label, n_epochs=n_epochs, print_debug=print_debug):
-        print("verified")
+        print("Verified")
     else:
-        print("not verified")
+        print("Not verified")
 
 
 def main():
@@ -81,9 +79,11 @@ def run_all_test_cases():
         if folder_path.is_dir() and "conv" not in folder_path.name:
             for file_path in folder_path.glob("*.txt"):
                 relative_file_path = f"../test_cases/{folder_path.name}/{file_path.name}"
-                non_console_main(folder_path.name, relative_file_path, n_epochs=20, print_debug=False)
+                print(relative_file_path)
+                non_console_main(folder_path.name, relative_file_path, n_epochs=100, print_debug=False)
+                attack_non_console_main(folder_path.name, relative_file_path, n_epochs=100, print_debug=False)
 
 
 if __name__ == "__main__":
-    main()
-    # run_all_test_cases()
+    # main()
+    run_all_test_cases()
