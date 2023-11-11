@@ -1,20 +1,18 @@
 import argparse
-import torch
-from torch import nn
 
-from networks import get_network
-from utils.loading import parse_spec
 from abstract_transformers import *
 from deeppoly import DeepPoly
+from networks import get_network
+from utils.loading import parse_spec
 
 DEVICE = "cpu"
 
 
 def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int) -> bool:
-
     deeppoly = DeepPoly(net, inputs, eps, true_label)
     return deeppoly.run()
-    
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Neural network verification using DeepPoly relaxation."
@@ -47,7 +45,7 @@ def main():
 
     # print(args.spec)
 
-    net = get_network(args.net, dataset, f"models/{dataset}_{args.net}.pt").to(DEVICE)  # TODO: remove the ../
+    net = get_network(args.net, dataset, f"../models/{dataset}_{args.net}.pt").to(DEVICE)  # TODO: remove the ../
 
     image = image.to(DEVICE)
     out = net(image.unsqueeze(0))
