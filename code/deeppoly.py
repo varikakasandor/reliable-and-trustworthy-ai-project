@@ -52,7 +52,6 @@ class DeepPoly:
         final_linear.bias.requires_grad = False
         weight_matrix = -1 * torch.eye(num_classes)
         weight_matrix[:, true_label] += 1
-        # print(weight_matrix)
         final_linear.weight = nn.Parameter(weight_matrix)
         final_linear.weight.requires_grad = False
         final_linear.eval()
@@ -128,8 +127,13 @@ class DeepPoly:
                 self.optimizer.step()
 
                 for transformer in self.transformers:
-                    if isinstance(transformer, classes_to_optimize):
+                    if isinstance(transformer, ReLUTransformer):
                         transformer.alphas.data.clamp_(min=0, max=1)
+                    elif isinstance(transformer, LeakyReLUTransformer):
+                        if transformer.negative_slope <= 1:
+                            transformer.alphas.data.clamp_(min=transformer.negative_slope, max=1)
+                        else:
+                            transformer.alphas.data.clamp_(min=1, max=transformer.negative_slope)
 
                 for transformer in self.transformers:
                     transformer.calculate()

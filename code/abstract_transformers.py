@@ -4,9 +4,6 @@ from torch import nn
 from typing import List, Tuple, Optional
 
 
-# TODO: delete commented print statements
-
-
 class AbstractTransformer:
 
     def __init__(self):
@@ -281,7 +278,7 @@ class LeakyReLUTransformer(AbstractTransformer):
             ub.shape) + crossing.int() * self.alphas
         self.lb_weights = torch.diag(self.lb_weights)
         self.lb_bias = torch.zeros(lb.shape)
-        if 1 < self.negative_slope: # if slope is bigger than 1 then upper and lower bound lines are swapped
+        if 1 < self.negative_slope:  # if slope is bigger than 1 then upper and lower bound lines are swapped
             self.ub_weights, self.ub_bias, self.lb_weights, self.lb_bias = self.lb_weights, self.lb_bias, self.ub_weights, self.ub_bias
 
         # try getting bounds without redoing backsubstitution again (this likely never gives improvement)
@@ -345,4 +342,3 @@ class LeakyReLUTransformer(AbstractTransformer):
         else:
             return self.previous_transformer.backward(new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias,
                                                       backsub_depth)
-

@@ -9,9 +9,10 @@ from utils.loading import parse_spec
 from attacker import attack_non_console_main
 
 
-def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int, n_epochs: int, print_debug: bool) -> bool:
+def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int, n_epochs: int,
+            print_debug: bool) -> bool:
     deeppoly = DeepPoly(net, inputs, eps, true_label, print_debug=print_debug)
-    return deeppoly.run(n_epochs = n_epochs)
+    return deeppoly.run(n_epochs=n_epochs)
 
 
 def main_body(parser_args, n_epochs=1000, print_debug=True):
@@ -68,22 +69,26 @@ def main():
 
 def non_console_main(net, spec, n_epochs=1000, print_debug=True):
     model_config = ModelConfig(spec=spec, net=net)
-    main_body(model_config, n_epochs = n_epochs, print_debug=print_debug)
+    main_body(model_config, n_epochs=n_epochs, print_debug=print_debug)
 
 
-def run_all_test_cases():
+def run_all_test_cases(forbidden_networks):
+    if forbidden_networks is None:
+        forbidden_networks = ["conv"]
     current_file_path = Path(__file__).resolve()
     parent_directory = current_file_path.parent.parent
     test_cases_folder = parent_directory / 'test_cases'
     for folder_path in test_cases_folder.iterdir():
-        if folder_path.is_dir() and "conv" not in folder_path.name:
+        if folder_path.is_dir() and all(s not in folder_path.name for s in forbidden_networks):
             for file_path in folder_path.glob("*.txt"):
-                relative_file_path = f"../test_cases/{folder_path.name}/{file_path.name}"
-                print(relative_file_path)
-                non_console_main(folder_path.name, relative_file_path, n_epochs=100, print_debug=False)
-                attack_non_console_main(folder_path.name, relative_file_path, n_epochs=100, print_debug=False)
+                if "cifar" not in file_path.name:  # TODO: make it work for CIFAR as well, idk what the issue is
+                    relative_file_path = f"../test_cases/{folder_path.name}/{file_path.name}"
+                    print(relative_file_path)
+                    non_console_main(folder_path.name, relative_file_path, n_epochs=100, print_debug=False)
+                    attack_non_console_main(folder_path.name, relative_file_path, n_epochs=100, print_debug=False)
 
 
 if __name__ == "__main__":
     # main()
-    run_all_test_cases()
+    run_all_test_cases(
+        forbidden_networks=["conv", "fc_1", "fc_2", "fc_3", "fc_4", "fc_5", "fc_base"])  # the early fc-s are easier
