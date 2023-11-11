@@ -145,7 +145,7 @@ class LinearTransformer(AbstractTransformer):
 
 class ReLUTransformer(AbstractTransformer):
 
-    def __init__(self, module: nn.Linear, previous_transformer: AbstractTransformer, depth: int):
+    def __init__(self, module: nn.ReLU, previous_transformer: AbstractTransformer, depth: int):
 
         super().__init__()
         self.module = module
@@ -216,7 +216,6 @@ class ReLUTransformer(AbstractTransformer):
         self.lb = torch.max(positive_lb_weights @ lb + negative_lb_weights @ ub + self.equation_lb_bias, self.lb)
         self.ub = torch.min(positive_ub_weights @ ub + negative_ub_weights @ lb + self.equation_ub_bias, self.ub)
 
-
     def backward(self,
                  ub_weights: torch.Tensor,
                  lb_weights: torch.Tensor,
@@ -244,3 +243,28 @@ class ReLUTransformer(AbstractTransformer):
         else:
             return self.previous_transformer.backward(new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias,
                                                       backsub_depth)
+
+
+class LeakyReLUTransformer(AbstractTransformer):
+
+    def __init__(self, module: nn.LeakyReLU, previous_transformer: AbstractTransformer, depth: int):
+        super().__init__()
+        self.module = module
+        self.equation_transformer = previous_transformer
+        self.previous_transformer = previous_transformer
+        self.depth = depth
+        self.backsub_depth = depth
+
+        self.alphas = None
+
+    def calculate(self):
+        pass
+
+    def backward(self,
+                 ub_weights: torch.Tensor,
+                 lb_weights: torch.Tensor,
+                 ub_bias: torch.Tensor,
+                 lb_bias: torch.Tensor,
+                 backsub_depth: int) -> Tuple[
+        AbstractTransformer, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        pass

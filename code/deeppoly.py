@@ -33,6 +33,9 @@ class DeepPoly:
             elif isinstance(layer, nn.ReLU):
                 self.transformers.append(ReLUTransformer(layer, self.transformers[-1], len(self.transformers)))
 
+            elif isinstance(layer, nn.LeakyReLU):
+                self.transformers.append(LeakyReLUTransformer(layer, self.transformers[-1], len(self.transformers)))
+
             else:
                 print(f"Layers of type {type(layer).__name__} are not yet supported")
 
