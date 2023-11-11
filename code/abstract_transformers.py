@@ -172,6 +172,8 @@ class ReLUTransformer(AbstractTransformer):
         self.depth = depth
         self.backsub_depth = depth
 
+        self.alphas = None
+
     def calculate(self):
 
         lb = self.previous_transformer.lb
@@ -187,19 +189,23 @@ class ReLUTransformer(AbstractTransformer):
         self.ub_bias = -crossing.int() * lmbda * lb
 
         # initialize self.alphas uniformly random between 0 and 1
-        self.alphas = torch.rand(lb.shape, requires_grad=True)
+        if self.alphas is None:
+            self.alphas = torch.rand(lb.shape, requires_grad=True)
         self.lb_weights = negative.int() * torch.zeros(ub.shape) + positive.int() * torch.ones(ub.shape) + crossing.int() * self.alphas
         self.lb_weights = torch.diag(self.lb_weights)
         self.lb_bias = torch.zeros(lb.shape)
 
+        '''
+        # we're sure both self.ub_weights and self.lb_weights are positive so this is unnecessary
         positive_ub_weights = (self.ub_weights>=0).int() * self.ub_weights
         negative_ub_weights = (self.ub_weights<0).int() * self.ub_weights
 
         positive_lb_weights = (self.lb_weights>=0).int() * self.lb_weights
         negative_lb_weights = (self.lb_weights<0).int() * self.lb_weights
+        '''
 
-        self.lb = positive_lb_weights @ lb + negative_lb_weights @ ub + self.lb_bias
-        self.ub = positive_ub_weights @ ub + negative_ub_weights @ lb + self.ub_bias
+        self.lb = self.lb_weights @ lb + self.lb_bias
+        self.ub = self.ub_weights @ ub + self.ub_bias
 
         self.lb = torch.max(self.lb, torch.zeros(self.lb.shape))
 
