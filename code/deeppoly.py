@@ -1,6 +1,7 @@
 from abstract_transformers import *
 from torchviz import make_dot
 
+
 class DeepPoly:
 
     def __init__(self, net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int, print_debug=True):
@@ -85,13 +86,15 @@ class DeepPoly:
                 print(try_string)
                 print("-" * len(try_string) + "\n")
 
-            with torch.autograd.no_grad():
-                for transformer in self.transformers[:-1]:
+            if self.backsub_depth > 0:
+                with torch.autograd.no_grad():
+                    for transformer in self.transformers:
+                        transformer.backsub_depth = self.backsub_depth
+                        transformer.calculate()
+            else:
+                for transformer in self.transformers:
                     transformer.backsub_depth = self.backsub_depth
                     transformer.calculate()
-
-            self.transformers[-1].backsub_depth = self.backsub_depth
-            self.transformers[-1].calculate()
 
             verified = self.verify()
             if not backsub:
@@ -114,8 +117,9 @@ class DeepPoly:
                 self.sum_diff = torch.sum(torch.relu(-self.transformers[-1].lb))
                 self.sum_diff.backward(retain_graph=True)
                 if epoch == 0 and self.print_debug:
-                    dot = make_dot(self.sum_diff, params={str(idx): transformer.alphas for idx, transformer in enumerate(self.transformers) if
-                     isinstance(transformer, layer_types_to_optimise)})
+                    dot = make_dot(self.sum_diff, params={str(idx): transformer.alphas for idx, transformer in
+                                                          enumerate(self.transformers) if
+                                                          isinstance(transformer, layer_types_to_optimise)})
                     dot.render("./diagnostic_plots/computational_graph", format="png", cleanup=True)
                 self.optimizer.step()
                 self.optimizer.zero_grad()
@@ -129,10 +133,8 @@ class DeepPoly:
                         else:
                             transformer.alphas.data.clamp_(min=1, max=transformer.negative_slope)
 
-                with torch.autograd.no_grad():
-                    for transformer in self.transformers[:-1]:
-                        transformer.calculate()
-                self.transformers[-1].calculate()
+                for transformer in self.transformers:
+                    transformer.calculate()
 
                 verified = self.verify()
                 if verified:
