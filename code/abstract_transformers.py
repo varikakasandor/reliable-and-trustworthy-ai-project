@@ -229,6 +229,9 @@ class ReLUTransformer(AbstractTransformer):
         else:
             return self.previous_transformer.backward(new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias,
                                                       backsub_depth)
+        
+    def clamp_alphas(self):
+        self.alphas.data.clamp_(min=0, max=1)
 
 
 class LeakyReLUTransformer(AbstractTransformer):
@@ -326,3 +329,9 @@ class LeakyReLUTransformer(AbstractTransformer):
         else:
             return self.previous_transformer.backward(new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias,
                                                       backsub_depth)
+
+    def clamp_alphas(self):
+        if self.negative_slope <= 1:
+            self.alphas.data.clamp_(min=self.negative_slope, max=1)
+        else:
+            self.alphas.data.clamp_(min=1, max=self.negative_slope)

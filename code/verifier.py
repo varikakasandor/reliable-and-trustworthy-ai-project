@@ -33,8 +33,10 @@ def main_body(parser_args, n_epochs=1000, print_debug=True):
 
     if analyze(net, image, eps, true_label, n_epochs=n_epochs, print_debug=print_debug):
         print("Verified")
+        return True
     else:
         print("Not verified")
+        return False
 
 
 def main():
@@ -69,7 +71,7 @@ def main():
 
 def non_console_main(net, spec, n_epochs=1000, print_debug=True):
     model_config = ModelConfig(spec=spec, net=net)
-    main_body(model_config, n_epochs=n_epochs, print_debug=print_debug)
+    return main_body(model_config, n_epochs=n_epochs, print_debug=print_debug)
 
 
 def run_all_test_cases(forbidden_networks=("conv",)):
@@ -79,14 +81,16 @@ def run_all_test_cases(forbidden_networks=("conv",)):
     for folder_path in test_cases_folder.iterdir():
         if folder_path.is_dir() and all(s not in folder_path.name for s in forbidden_networks):
             for file_path in folder_path.glob("*.txt"):
-                if "cifar" not in file_path.name:  # TODO: make it work for CIFAR as well, idk what the issue is
-                    relative_file_path = f"../test_cases/{folder_path.name}/{file_path.name}"
-                    print(relative_file_path)
-                    non_console_main(folder_path.name, relative_file_path, n_epochs=200, print_debug=False)
-                    attack_non_console_main(folder_path.name, relative_file_path, n_epochs=100, print_debug=False)
+                relative_file_path = f"../test_cases/{folder_path.name}/{file_path.name}"
+                print(f"Model: {folder_path.name}")
+                print(f"Image: {file_path.name}")
+                attacked = attack_non_console_main(folder_path.name, relative_file_path, n_epochs=100, print_debug=False)
+                verified = non_console_main(folder_path.name, relative_file_path, n_epochs=1000, print_debug=False)
+                assert verified or attacked
+                print()
 
 
 if __name__ == "__main__":
-    # non_console_main("fc_7", "../test_cases/fc_7/img4_mnist_0.0928.txt", print_debug=True, n_epochs=1000)
+    # non_console_main("fc_6", "../test_cases/fc_6/img0_cifar10_0.0128.txt", print_debug=False, n_epochs=1000)
     # main()
     run_all_test_cases()

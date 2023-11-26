@@ -1,5 +1,5 @@
 from abstract_transformers import *
-from torchviz import make_dot
+#from torchviz import make_dot
 
 
 class DeepPoly:
@@ -44,7 +44,7 @@ class DeepPoly:
                 print(f"Layers of type {type(layer).__name__} are not yet supported")
 
         # add a final linear layer to be able to backsubstitue the difference between x_{true_label} - x_i for all i
-        # \neq true_label
+        # != true_label
         out = self.net(self.inputs.unsqueeze(0))
         num_classes = out.shape[1]
 
@@ -74,8 +74,8 @@ class DeepPoly:
         if self.print_debug:
             print(f"Verified: {verified}\n")
         return verified
-
-    def run(self, n_epochs=1000, backsub=True) -> bool:
+    
+    def first_run(self, backsub = True) -> bool:
 
         # try to verify - if we can't, backsub every layer by 1 and try again
         verified = False
@@ -101,43 +101,66 @@ class DeepPoly:
                 break
 
             self.backsub_depth -= 1
+        
+        return verified
+    
+    def optimization_run(self, n_epochs=1000) -> bool:
 
-        self.backsub_depth = 0
-
-        # then try optimizing slopes of (leaky) relus using gradient descent
+        verified = False
+        # each run should randomly initialize the slopes and optimize them
         layer_types_to_optimise = (ReLUTransformer, LeakyReLUTransformer)
-        if not verified and any(isinstance(layers, layer_types_to_optimise) for layers in self.transformers):
-            if self.print_debug:
-                print("Trying to optimize (leaky) relu slopes")
-            self.optimizer = torch.optim.Adam(
-                [transformer.alphas for transformer in self.transformers if
-                 isinstance(transformer, layer_types_to_optimise)],
-                lr=0.01)
-            for epoch in range(n_epochs):
-                self.sum_diff = torch.sum(torch.relu(-self.transformers[-1].lb))
-                self.sum_diff.backward(retain_graph=True)
-                if epoch == 0 and self.print_debug:
-                    dot = make_dot(self.sum_diff, params={str(idx): transformer.alphas for idx, transformer in
-                                                          enumerate(self.transformers) if
-                                                          isinstance(transformer, layer_types_to_optimise)})
-                    dot.render("./diagnostic_plots/computational_graph", format="png", cleanup=True)
-                self.optimizer.step()
-                self.optimizer.zero_grad()
+        if not any(isinstance(layers, layer_types_to_optimise) for layers in self.transformers):
+            return verified
+        
+        if self.print_debug:
+            print("Trying to optimize (leaky) relu slopes")
 
-                for transformer in self.transformers:
-                    if isinstance(transformer, ReLUTransformer):
-                        transformer.alphas.data.clamp_(min=0, max=1)
-                    elif isinstance(transformer, LeakyReLUTransformer):
-                        if transformer.negative_slope <= 1:
-                            transformer.alphas.data.clamp_(min=transformer.negative_slope, max=1)
-                        else:
-                            transformer.alphas.data.clamp_(min=1, max=transformer.negative_slope)
+        params = []
+        for transformer in self.transformers:
+            if isinstance(transformer, layer_types_to_optimise):
+                # TODO: add some random initialization for params
+                params.append(transformer.alphas)
 
-                for transformer in self.transformers:
-                    transformer.calculate()
+        self.optimizer = torch.optim.Adam(params, lr = 0.01)
 
-                verified = self.verify()
-                if verified:
-                    break
+        for epoch in range(n_epochs):
+            self.sum_diff = torch.sum(torch.relu(-self.transformers[-1].lb))
+            self.sum_diff.backward(retain_graph=True)
+
+            self.optimizer.step()
+            self.optimizer.zero_grad()
+
+            for transformer in self.transformers:
+                if isinstance(transformer, layer_types_to_optimise):
+                    transformer.clamp_alphas()
+
+                transformer.calculate()
+
+            verified = self.verify()
+            if verified:
+                break
 
         return verified
+
+    def run(self, n_epochs=1000, backsub=True) -> bool:
+
+        verified = self.first_run(backsub = backsub)
+
+        if verified:
+            return verified
+        
+        # if straightforwards backsubstitution doesn't work, try to optimize the slopes until we verify
+        num_runs = 0
+        while True:
+
+            verified = self.optimization_run(n_epochs=n_epochs)
+            if verified:
+                break
+            num_runs += 1
+
+            # TODO: DELETE FOR THE FINAL SUBMISSION
+            if num_runs > 0:
+                break
+        
+        return verified
+

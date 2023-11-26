@@ -43,6 +43,7 @@ def pgd(model, x_batch, true_label: int, eps: float, eps_step: float):
 def attack(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int, n_epochs: int, print_debug: bool) -> bool:
     for i in range(n_epochs):
         x_adv = pgd(net, inputs, true_label, eps, 0.01)
+        
         assert check_region(inputs, x_adv, eps)
         out = net(x_adv.unsqueeze(0))
         if out.max(dim=1)[1].item() != true_label:
@@ -70,10 +71,12 @@ def attack_main_body(parser_args, n_epochs=100, print_debug=True):
     pred_label = out.max(dim=1)[1].item()
     assert pred_label == true_label
 
-    if attack(net, image, eps, true_label, n_epochs=n_epochs, print_debug=print_debug):
+    if attack(net, image.unsqueeze(0), eps, true_label, n_epochs=n_epochs, print_debug=print_debug):
         print("Attack successful")
+        return True
     else:
         print("Attack failed")
+        return False
 
 
 def attack_main():
@@ -109,7 +112,7 @@ def attack_main():
 
 def attack_non_console_main(net, spec, n_epochs=100, print_debug=True):
     model_config = ModelConfig(spec=spec, net=net)
-    attack_main_body(model_config, n_epochs=n_epochs, print_debug=print_debug)
+    return attack_main_body(model_config, n_epochs=n_epochs, print_debug=print_debug)
 
 
 if __name__ == "__main__":
