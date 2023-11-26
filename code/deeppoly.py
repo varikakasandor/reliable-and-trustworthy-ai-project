@@ -118,7 +118,7 @@ class DeepPoly:
         params = []
         for transformer in self.transformers:
             if isinstance(transformer, layer_types_to_optimise):
-                # TODO: add some random initialization for params
+                transformer.reinitialize_alphas()
                 params.append(transformer.alphas)
 
         self.optimizer = torch.optim.Adam(params, lr = 0.01)
@@ -129,6 +129,8 @@ class DeepPoly:
 
             self.optimizer.step()
             self.optimizer.zero_grad()
+
+            # TODO: check if it makes sense to try to verify after each step
 
             for transformer in self.transformers:
                 if isinstance(transformer, layer_types_to_optimise):

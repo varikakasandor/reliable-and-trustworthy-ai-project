@@ -165,7 +165,9 @@ class ReLUTransformer(AbstractTransformer):
 
         # initialize self.alphas uniformly random between 0 and 1
         if self.alphas is None:
-            self.alphas = torch.rand(lb.shape, requires_grad=True)
+            self.alphas = torch.empty(lb.shape, requires_grad=True)
+            nn.init.uniform_(self.alphas, 0, 1)
+            #self.alphas = torch.rand(lb.shape, requires_grad=True) 
         self.lb_weights = negative.int() * torch.zeros(ub.shape) + positive.int() * torch.ones(
             ub.shape) + crossing.int() * self.alphas
         self.lb_weights = torch.diag(self.lb_weights)
@@ -233,6 +235,9 @@ class ReLUTransformer(AbstractTransformer):
     def clamp_alphas(self):
         self.alphas.data.clamp_(min=0, max=1)
 
+    def reinitialize_alphas(self):
+        nn.init.uniform_(self.alphas, 0, 1)
+
 
 class LeakyReLUTransformer(AbstractTransformer):
 
@@ -255,12 +260,11 @@ class LeakyReLUTransformer(AbstractTransformer):
 
         lmbda = (ub - self.negative_slope * lb) / (ub - lb)  # TODO: think if ub=lb can happen and deal with that
         if self.alphas is None:
-            self.alphas = torch.full(lb.shape, self.negative_slope, requires_grad=True)
-            # initialize self.alphas uniformly random between self.negative_slope and 1
-            # (or 1 and self.negative_slope whatever is non-empty)
-            # self.alphas = (1 + self.negative_slope) * torch.rand(lb.shape) - self.negative_slope
-            # self.alphas.requires_grad_()
-            # TODO: make random init work with autograd
+            self.alphas = torch.empty(lb.shape, requires_grad=True)
+            if self.negative_slope <= 1:
+                nn.init.uniform_(self.alphas, self.negative_slope, 1)
+            else:
+                nn.init.uniform_(self.alphas, 1, self.negative_slope)
 
         self.ub_weights = negative.int() * torch.full(ub.shape, self.negative_slope) + positive.int() * torch.ones(
             ub.shape) + crossing.int() * lmbda
@@ -335,3 +339,9 @@ class LeakyReLUTransformer(AbstractTransformer):
             self.alphas.data.clamp_(min=self.negative_slope, max=1)
         else:
             self.alphas.data.clamp_(min=1, max=self.negative_slope)
+
+    def reinitialize_alphas(self):
+        if self.negative_slope <= 1:
+            nn.init.uniform_(self.alphas, self.negative_slope, 1)
+        else:
+            nn.init.uniform_(self.alphas, 1, self.negative_slope)
