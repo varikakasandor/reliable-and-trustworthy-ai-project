@@ -118,7 +118,7 @@ def attack_non_console_main(net, spec, n_epochs=100, print_debug=True):
     model_config = ModelConfig(spec=spec, net=net)
     return attack_main_body(model_config, n_epochs=n_epochs, print_debug=print_debug)
 
-def run_all_attacks(forbidden_networks=("fc",)):
+def run_all_attacks(forbidden_networks=()):
     current_file_path = Path(__file__).resolve()
     parent_directory = current_file_path.parent.parent
     test_cases_folder = parent_directory / 'test_cases'
