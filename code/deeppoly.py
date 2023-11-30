@@ -1,5 +1,6 @@
 from abstract_transformers import *
 #from torchviz import make_dot
+import torch
 
 
 class DeepPoly:
@@ -27,11 +28,11 @@ class DeepPoly:
                 else:
                     self.transformers.append(InputTransformer(inputs, eps, flatten=False))
 
-            if isinstance(layer, nn.Flatten):
-                raise Exception("Flatten layer can only be the first layer in the network")
-
-            elif isinstance(layer, nn.Linear):
+            if isinstance(layer, nn.Linear):
                 self.transformers.append(LinearTransformer(layer, self.transformers[-1], len(self.transformers)))
+
+            elif isinstance(layer, nn.Flatten):
+                continue
 
             elif isinstance(layer, nn.ReLU):
                 self.transformers.append(ReLUTransformer(layer, self.transformers[-1], len(self.transformers)))
@@ -39,6 +40,9 @@ class DeepPoly:
 
             elif isinstance(layer, nn.LeakyReLU):
                 self.transformers.append(LeakyReLUTransformer(layer, self.transformers[-1], len(self.transformers)))
+
+            elif isinstance(layer, nn.Conv2d):
+                self.transformers.append(Conv2dTransformer(layer, self.transformers[-1], len(self.transformers)))
 
             else:
                 print(f"Layers of type {type(layer).__name__} are not yet supported")
@@ -121,7 +125,8 @@ class DeepPoly:
                 transformer.reinitialize_alphas()
                 params.append(transformer.alphas)
 
-        self.optimizer = torch.optim.Adam(params, lr = 0.01)
+        # TODO: optimize the learning rate
+        self.optimizer = torch.optim.Adam(params, lr = 1)
 
         for epoch in range(n_epochs):
             self.sum_diff = torch.sum(torch.relu(-self.transformers[-1].lb))
@@ -151,18 +156,11 @@ class DeepPoly:
         if verified:
             return verified
         
-        # if straightforwards backsubstitution doesn't work, try to optimize the slopes until we verify
-        num_runs = 0
-        while True:
-
+        while not verified:
             verified = self.optimization_run(n_epochs=n_epochs)
-            if verified:
-                break
-            num_runs += 1
 
-            # TODO: DELETE FOR THE FINAL SUBMISSION
-            if num_runs > 0:
-                break
+            # TODO: delete for final submission
+            break
         
         return verified
 

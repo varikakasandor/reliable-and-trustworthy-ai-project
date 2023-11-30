@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 from typing import List, Tuple, Optional
 
@@ -50,13 +51,14 @@ class InputTransformer(AbstractTransformer):
         super().__init__()
         self.inputs = inputs
         self.eps = eps
+        self.original_shape = inputs.shape
 
         self.lb = inputs - eps
         self.ub = inputs + eps
 
-        if flatten:
-            self.lb = self.lb.flatten()
-            self.ub = self.ub.flatten()
+        #if flatten:
+        self.lb = self.lb.flatten()
+        self.ub = self.ub.flatten()
 
         self.lb = torch.clamp(self.lb, min=0, max=1)
         self.ub = torch.clamp(self.ub, min=0, max=1)
@@ -82,7 +84,6 @@ class LinearTransformer(AbstractTransformer):
 
     def calculate(self):
 
-        # self.equation_transformer = self.previous_transformer
         # we backsub recursively until we reach the layer we are backsubstituting into
         if self.backsub_depth < self.previous_transformer.depth:
             # print(f"Backsub called from {self}")
@@ -147,12 +148,14 @@ class ReLUTransformer(AbstractTransformer):
         self.backsub_depth = depth
 
         self.alphas = None
-
+    
     def calculate(self):
 
         lb = self.previous_transformer.lb
         ub = self.previous_transformer.ub
-
+        if isinstance(self.previous_transformer, (InputTransformer, Conv2dTransformer)):
+            self.original_shape = self.previous_transformer.original_shape
+        
         crossing = (lb < 0) & (ub > 0)
         negative = (ub <= 0)
         positive = (lb >= 0)
@@ -251,14 +254,19 @@ class LeakyReLUTransformer(AbstractTransformer):
         self.alphas = None
 
     def calculate(self):
+
         lb = self.previous_transformer.lb
         ub = self.previous_transformer.ub
+        if isinstance(self.previous_transformer, (InputTransformer, Conv2dTransformer)):
+            self.original_shape = self.previous_transformer.original_shape
+        #self.original_shape = self.previous_transformer.original_shape
 
         crossing = (lb < 0) & (ub > 0)
         negative = (ub <= 0)
         positive = (lb >= 0)
 
-        lmbda = (ub - self.negative_slope * lb) / (ub - lb)  # TODO: think if ub=lb can happen and deal with that
+        lmbda = (ub - self.negative_slope * lb) / (ub - lb)  # TODO: think if ub=lb can happen and deal with that 
+        # comment by Mert: above mentioned is filtered by the crossing variable above so no need to worry about it
         if self.alphas is None:
             self.alphas = torch.empty(lb.shape, requires_grad=True)
             if self.negative_slope <= 1:
@@ -345,3 +353,150 @@ class LeakyReLUTransformer(AbstractTransformer):
             nn.init.uniform_(self.alphas, self.negative_slope, 1)
         else:
             nn.init.uniform_(self.alphas, 1, self.negative_slope)
+
+class Conv2dTransformer(AbstractTransformer):
+
+    def __init__(self, module: nn.Conv2d, previous_transformer: AbstractTransformer, depth: int):
+        # we only need to accommodate different kernel size, padding, and stride
+        super().__init__()
+        self.module = module
+        self.conv_weight = module.weight
+        self.conv_bias = module.bias
+        self.in_channels = module.in_channels
+        self.out_channels = module.out_channels
+        self.kernel_size = module.kernel_size
+        self.padding = module.padding
+        self.padding_param = self.module._reversed_padding_repeated_twice
+        self.stride = module.stride
+
+        self.previous_transformer = previous_transformer
+        self.depth = depth
+
+        '''
+        print(self)
+        print(f"Weights shape: {self.conv_weight.shape}")
+        print(f"Bias shape: {self.conv_bias.shape}")
+        print(f"Input channels: {self.in_channels}")
+        print(f"Output channels: {self.out_channels}")
+        print(f"Kernel size: {self.kernel_size}")
+        print(f"Padding: {self.padding}")
+        print(f"Stride: {self.stride}")
+        print(f"Padding param: {self.padding_param}")
+        print()
+        
+        #x = torch.randn(1, 3, 28, 28)
+        #y = self.module(x)
+        #print(y.shape)
+        '''
+
+
+
+    def calculate(self):
+
+        previous_shape = self.previous_transformer.original_shape
+        previous_shape_data = torch.zeros(previous_shape)
+        y = self.module(previous_shape_data)
+        # shape of the output of the convolutional layer
+        self.original_shape = y.shape
+        #print("Original Input Shape: ", previous_shape)
+        #print("Original Output Shape: ", self.original_shape)
+        
+        n_points = self.original_shape[1] * self.original_shape[2] 
+        self.bias = torch.flatten(self.conv_bias.repeat_interleave(n_points))
+        #print("Bias Shape: ", self.bias.shape)
+
+        # weights should be of shape (n_points_output, n_points_input)
+        prev_n_points = torch.prod(torch.tensor(previous_shape))
+        self.weight = torch.zeros((self.bias.shape[0], prev_n_points))
+        #print("Weight Shape: ", self.weight.shape)
+        padded_image = F.pad(previous_shape_data, self.padding_param)
+        #print("Padded Image Shape: ", padded_image.shape)
+
+
+        random_data = torch.randn_like(previous_shape_data)
+        random_output = self.module(random_data).flatten()
+        
+        idx = 0
+        for out_channel_idx in range(self.out_channels):
+            for i in range(0, previous_shape[1], self.stride[0]):
+                for j in range(0, previous_shape[2], self.stride[1]):
+                    padded_image = torch.zeros_like(padded_image)
+                    for in_channel_idx in range(self.in_channels):
+                        
+                        kernel = self.conv_weight[out_channel_idx][in_channel_idx]
+                        padded_image[in_channel_idx][i:i+self.kernel_size[0], j:j+self.kernel_size[1]] = kernel
+                    
+                    cut_padded_image = padded_image[:, self.padding[0]: -self.padding[0], self.padding[1]: -self.padding[1]]
+                    flattened_weights = torch.flatten(cut_padded_image)
+                    self.weight[idx] = flattened_weights
+                    
+                    try:
+                        assert torch.isclose(random_output[idx], torch.sum(flattened_weights * random_data.flatten()) + self.bias[idx], atol=1e-5)
+                    except:
+                        pass
+                        print(idx)
+                        print(torch.sum(flattened_weights * random_data.flatten()) + self.bias[idx] - random_output[idx])
+
+
+                    idx += 1
+        '''
+        for idx in [0,10,42,31,512,124,1000, 3002, 3412]:
+            print(random_output[idx])
+            print(torch.sum(self.weight[idx] * random_data.flatten()) + self.bias[idx])
+        '''
+        #raise NotImplementedError
+
+        #print(idx)
+        #raise NotImplementedError
+        
+        # we backsub recursively until we reach the layer we are backsubstituting into
+        if self.backsub_depth < self.previous_transformer.depth:
+            # print(f"Backsub called from {self}")
+            (self.equation_transformer,
+             self.equation_ub_weights,
+             self.equation_lb_weights,
+             self.equation_ub_bias,
+             self.equation_lb_bias) = self.previous_transformer.backward(self.weight,
+                                                                         self.weight,
+                                                                         self.bias,
+                                                                         self.bias,
+                                                                         self.backsub_depth)
+        else:
+            self.equation_transformer = self.previous_transformer
+            self.equation_ub_weights = self.weight
+            self.equation_lb_weights = self.weight
+            self.equation_ub_bias = self.bias
+            self.equation_lb_bias = self.bias
+
+        lb = self.equation_transformer.lb
+        ub = self.equation_transformer.ub
+
+        # use previous upper bound and lower bound for positive weights, otherwise swap
+        positive_ub_weights = (self.equation_ub_weights >= 0).int() * self.equation_ub_weights
+        negative_ub_weights = (self.equation_ub_weights < 0).int() * self.equation_ub_weights
+
+        positive_lb_weights = (self.equation_lb_weights >= 0).int() * self.equation_lb_weights
+        negative_lb_weights = (self.equation_lb_weights < 0).int() * self.equation_lb_weights
+
+        self.lb = positive_lb_weights @ lb + negative_lb_weights @ ub + self.equation_lb_bias
+        self.ub = positive_ub_weights @ ub + negative_ub_weights @ lb + self.equation_ub_bias
+
+    def backward(self,
+                 ub_weights: torch.Tensor,
+                 lb_weights: torch.Tensor,
+                 ub_bias: torch.Tensor,
+                 lb_bias: torch.Tensor,
+                 backsub_depth: int) -> Tuple[
+        AbstractTransformer, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+
+        new_ub_bias = ub_bias + ub_weights @ self.bias
+        new_lb_bias = lb_bias + lb_weights @ self.bias
+
+        new_ub_weights = ub_weights @ self.weight
+        new_lb_weights = lb_weights @ self.weight
+
+        if backsub_depth >= self.previous_transformer.depth:
+            return self.previous_transformer, new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias
+        else:
+            return self.previous_transformer.backward(new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias,
+                                                      backsub_depth)

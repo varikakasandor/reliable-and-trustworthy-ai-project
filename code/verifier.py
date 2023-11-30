@@ -91,6 +91,6 @@ def run_all_test_cases(forbidden_networks=("conv",)):
 
 
 if __name__ == "__main__":
-    # non_console_main("fc_6", "../test_cases/fc_6/img0_cifar10_0.0128.txt", print_debug=False, n_epochs=1000)
+    non_console_main("conv_4", "../test_cases/conv_4/img2_mnist_0.1797.txt", print_debug=True, n_epochs=100)
     # main()
-    run_all_test_cases()
+    #run_all_test_cases()

@@ -1,4 +1,6 @@
 import argparse
+import torch
+from pathlib import Path
 
 from abstract_transformers import *
 from networks import get_network
@@ -45,7 +47,8 @@ def attack(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int, n_
         x_adv = pgd(net, inputs, true_label, eps, 0.01)
         
         assert check_region(inputs, x_adv, eps)
-        out = net(x_adv.unsqueeze(0))
+        #print(x_adv.shape)
+        out = net(x_adv)
         if out.max(dim=1)[1].item() != true_label:
             if print_debug:
                 print(torch.abs(x_adv - inputs))
@@ -66,6 +69,7 @@ def attack_main_body(parser_args, n_epochs=100, print_debug=True):
         DEVICE)  # TODO: remove the ../
 
     image = image.to(DEVICE)
+    #print(image.shape)
     out = net(image.unsqueeze(0))
 
     pred_label = out.max(dim=1)[1].item()
@@ -114,6 +118,20 @@ def attack_non_console_main(net, spec, n_epochs=100, print_debug=True):
     model_config = ModelConfig(spec=spec, net=net)
     return attack_main_body(model_config, n_epochs=n_epochs, print_debug=print_debug)
 
+def run_all_attacks(forbidden_networks=("fc",)):
+    current_file_path = Path(__file__).resolve()
+    parent_directory = current_file_path.parent.parent
+    test_cases_folder = parent_directory / 'test_cases'
+    for folder_path in test_cases_folder.iterdir():
+        if folder_path.is_dir() and all(s not in folder_path.name for s in forbidden_networks):
+            for file_path in folder_path.glob("*.txt"):
+                relative_file_path = f"../test_cases/{folder_path.name}/{file_path.name}"
+                print(f"Model: {folder_path.name}")
+                print(f"Image: {file_path.name}")
+                attacked = attack_non_console_main(folder_path.name, relative_file_path, n_epochs=100, print_debug=False)
+                print()
+
 
 if __name__ == "__main__":
-    attack_main()
+    #attack_non_console_main("conv_1", "../test_cases/conv_1/img4_mnist_0.1241.txt", print_debug=False, n_epochs=1000)
+    run_all_attacks()
