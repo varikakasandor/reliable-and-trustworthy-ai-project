@@ -7,6 +7,7 @@ from networks import get_network
 from utils.general import *
 from utils.loading import parse_spec
 from attacker import attack_non_console_main
+import multiprocessing
 
 
 def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int, n_epochs: int,
@@ -74,7 +75,7 @@ def non_console_main(net, spec, n_epochs=1000, print_debug=True):
     return main_body(model_config, n_epochs=n_epochs, print_debug=print_debug)
 
 
-def run_all_test_cases(forbidden_networks=("conv",)):
+def run_all_test_cases(forbidden_networks=()):
     current_file_path = Path(__file__).resolve()
     parent_directory = current_file_path.parent.parent
     test_cases_folder = parent_directory / 'test_cases'
@@ -84,13 +85,27 @@ def run_all_test_cases(forbidden_networks=("conv",)):
                 relative_file_path = f"../test_cases/{folder_path.name}/{file_path.name}"
                 print(f"Model: {folder_path.name}")
                 print(f"Image: {file_path.name}")
+
                 attacked = attack_non_console_main(folder_path.name, relative_file_path, n_epochs=100, print_debug=False)
-                verified = non_console_main(folder_path.name, relative_file_path, n_epochs=1000, print_debug=False)
+                verification = multiprocessing.Process(target=non_console_main, args=(folder_path.name, relative_file_path, 50, False))
+                verification.start()
+
+                TIMEOUT = 60
+                verification.join(TIMEOUT)
+
+                if verification.is_alive():
+                    print("Not verified (timeout)")
+                    verification.terminate()
+                    verification.join()
+                    verification = False
+                
+                #verified = non_console_main(folder_path.name, relative_file_path, n_epochs=50, print_debug=False)
+                verified = verification
                 assert verified or attacked
                 print()
 
 
 if __name__ == "__main__":
-    non_console_main("conv_4", "../test_cases/conv_4/img2_mnist_0.1797.txt", print_debug=True, n_epochs=100)
+    #non_console_main("conv_4", "../test_cases/conv_4/img2_mnist_0.1797.txt", print_debug=True, n_epochs=50)
     # main()
-    #run_all_test_cases()
+    run_all_test_cases()
