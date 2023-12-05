@@ -1,6 +1,8 @@
 from abstract_transformers import *
 #from torchviz import make_dot
 import torch
+from torch.optim.lr_scheduler import StepLR
+
 
 
 class DeepPoly:
@@ -125,14 +127,19 @@ class DeepPoly:
                 transformer.reinitialize_alphas()
                 params.append(transformer.alphas)
 
-        # TODO: optimize the learning rate
-        self.optimizer = torch.optim.Adam(params, lr = 1)
+        # Initialize the optimizer with an initial learning rate
+        initial_lr = 1
+        self.optimizer = torch.optim.Adam(params, lr=initial_lr)
+
+        # Create a learning rate scheduler
+        scheduler = StepLR(self.optimizer, step_size=20, gamma=0.97)
 
         for epoch in range(n_epochs):
             self.sum_diff = torch.sum(torch.relu(-self.transformers[-1].lb))
             self.sum_diff.backward(retain_graph=True)
 
             self.optimizer.step()
+            scheduler.step()  # Update the learning rate
             self.optimizer.zero_grad()
 
             # TODO: check if it makes sense to try to verify after each step
