@@ -128,11 +128,11 @@ class DeepPoly:
                 params.append(transformer.alphas)
 
         # Initialize the optimizer with an initial learning rate
-        initial_lr = 1
+        initial_lr = 0.5
         self.optimizer = torch.optim.Adam(params, lr=initial_lr)
 
         # Create a learning rate scheduler
-        scheduler = StepLR(self.optimizer, step_size=20, gamma=0.97)
+        scheduler = StepLR(self.optimizer, step_size=20, gamma=0.97) # TODO: try plateau scheduler
 
         for epoch in range(n_epochs):
             self.sum_diff = torch.sum(torch.relu(-self.transformers[-1].lb))
