@@ -1,7 +1,7 @@
 from abstract_transformers import *
 #from torchviz import make_dot
 import torch
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
 
 
 
@@ -132,14 +132,15 @@ class DeepPoly:
         self.optimizer = torch.optim.Adam(params, lr=initial_lr)
 
         # Create a learning rate scheduler
-        scheduler = StepLR(self.optimizer, step_size=20, gamma=0.97) # TODO: try plateau scheduler
+        #scheduler = StepLR(self.optimizer, step_size=20, gamma=0.97) # TODO: try plateau scheduler
+        scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor = 0.5, patience = 1)
 
         for epoch in range(n_epochs):
             self.sum_diff = torch.sum(torch.relu(-self.transformers[-1].lb))
             self.sum_diff.backward(retain_graph=True)
 
             self.optimizer.step()
-            scheduler.step()  # Update the learning rate
+            scheduler.step(self.sum_diff)  # Update the learning rate
             self.optimizer.zero_grad()
 
             # TODO: check if it makes sense to try to verify after each step
@@ -167,7 +168,7 @@ class DeepPoly:
             verified = self.optimization_run(n_epochs=n_epochs)
 
             # TODO: delete for final submission
-            break
+            # break
         
         return verified
 
