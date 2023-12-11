@@ -143,8 +143,6 @@ class DeepPoly:
             scheduler.step(self.sum_diff)  # Update the learning rate
             self.optimizer.zero_grad()
 
-            # TODO: check if it makes sense to try to verify after each step
-
             for transformer in self.transformers:
                 if isinstance(transformer, layer_types_to_optimise):
                     transformer.clamp_alphas()
@@ -159,6 +157,7 @@ class DeepPoly:
 
     def run(self, n_epochs=1000, backsub=True) -> bool:
 
+        self.backsub_depth = 1
         verified = self.first_run(backsub = backsub)
 
         if verified:
