@@ -134,7 +134,8 @@ class DeepPoly:
         scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.5, patience=1)
 
         for epoch in range(n_epochs):
-            self.sum_diff = torch.sum(torch.relu(-self.transformers[-1].lb)) # TODO: find more sophisticated loss function
+            self.sum_diff = torch.sum(torch.relu(-self.transformers[-1].lb))
+            # TODO: find more sophisticated loss function
             self.sum_diff.backward(retain_graph=True)
 
             self.optimizer.step()
