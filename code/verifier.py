@@ -8,6 +8,8 @@ from utils.general import *
 from utils.loading import parse_spec
 from attacker import attack_non_console_main
 import multiprocessing
+import time
+
 
 
 def analyze(net: nn.Module, inputs: torch.Tensor, eps: float, true_label: int, n_epochs: int,
@@ -106,6 +108,12 @@ def run_all_test_cases(forbidden_networks=()):
 
 
 if __name__ == "__main__":
-    #non_console_main("conv_4", "../test_cases/conv_4/img2_mnist_0.1797.txt", print_debug=True, n_epochs=50)
-    #main()
-    run_all_test_cases()
+    start_time = time.time()
+
+    non_console_main("conv_4", "../test_cases/conv_4/img8_mnist_0.2113.txt", print_debug=True, n_epochs=100)
+    # main()
+    # run_all_test_cases(forbidden_networks=("fc_base", "fc_1", "fc_2", "fc_3", "fc_4", "fc_5", "fc_6", "fc_7", "conv_base", "conv_1", "conv_2", "conv_3"))
+
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"Total time elapsed: {elapsed_time} seconds")

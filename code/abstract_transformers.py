@@ -409,13 +409,6 @@ class Conv2dTransformer(AbstractTransformer):
                                            self.padding[1]: -self.padding[1]]
                         flattened_weights = torch.flatten(cut_padded_image)
                         self.weight[idx] = flattened_weights
-
-                        # TODO: delete for submission
-                        '''
-                        assert torch.isclose(random_output[idx],
-                                             torch.sum(flattened_weights * random_data.flatten()) + self.bias[idx],
-                                             atol=1e-5)
-                        '''
                         idx += 1
 
         # we backsub recursively until we reach the layer we are backsubstituting into
