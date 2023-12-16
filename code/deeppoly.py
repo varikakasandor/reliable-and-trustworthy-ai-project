@@ -127,15 +127,17 @@ class DeepPoly:
                 params.append(transformer.alphas)
 
         # Initialize the optimizer with an initial learning rate
-        initial_lr = 0.5
+        initial_lr = 1
         self.optimizer = torch.optim.Adam(params, lr=initial_lr)
 
         # Create a learning rate scheduler
         scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.5, patience=1)
 
+        carlini_tau = 0.0 # doesn't seem to help a lot cause usually only 1 negative value is left to deal with, so I 0d it out
+
         for epoch in range(n_epochs):
-            self.sum_diff = torch.sum(torch.relu(-self.transformers[-1].lb))
-            # TODO: find more sophisticated loss function
+            self.sum_diff = torch.sum(torch.relu(-self.transformers[-1].lb - carlini_tau))
+            carlini_tau *= 0.9
             self.sum_diff.backward(retain_graph=True)
 
             self.optimizer.step()
