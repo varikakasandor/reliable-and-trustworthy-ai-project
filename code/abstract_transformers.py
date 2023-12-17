@@ -393,9 +393,6 @@ class Conv2dTransformer(AbstractTransformer):
 
             padded_image = F.pad(previous_shape_data, self.padding_param)
 
-            random_data = torch.randn_like(previous_shape_data)
-            random_output = self.module(random_data).flatten()
-
             idx = 0
             for out_channel_idx in range(self.out_channels):
                 for i in range(0, previous_shape[1], self.stride[0]):
