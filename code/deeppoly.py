@@ -107,6 +107,7 @@ class DeepPoly:
 
             self.backsub_depth -= 1
 
+        self.backsub_depth = 0
         return verified
 
     def optimization_run(self, n_epochs=1000) -> bool:
@@ -127,7 +128,7 @@ class DeepPoly:
                 params.append(transformer.alphas)
 
         # Initialize the optimizer with an initial learning rate
-        initial_lr = 1.0
+        initial_lr = 0.5
         self.optimizer = torch.optim.Adam(params, lr=initial_lr)
 
         # Create a learning rate scheduler
@@ -155,7 +156,7 @@ class DeepPoly:
 
     def run(self, n_epochs=1000, backsub=True) -> bool:
 
-        self.backsub_depth = 1
+        self.backsub_depth = 0
         verified = self.first_run(backsub=backsub)
 
         if verified:
