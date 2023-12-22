@@ -1,5 +1,4 @@
 from abstract_transformers import *
-from torchviz import make_dot
 import torch
 from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
 

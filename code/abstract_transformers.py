@@ -4,7 +4,6 @@ import torch.nn.functional as F
 
 from typing import List, Tuple, Optional
 
-
 class AbstractTransformer:
 
     def __init__(self):
@@ -362,7 +361,6 @@ class LeakyReLUTransformer(AbstractTransformer):
             nn.init.uniform_(self.alphas, self.negative_slope, 1)
         else:
             nn.init.uniform_(self.alphas, 1, self.negative_slope)
-
 
 class Conv2dTransformer(AbstractTransformer):
 

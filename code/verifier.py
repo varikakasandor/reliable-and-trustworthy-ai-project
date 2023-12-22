@@ -89,10 +89,13 @@ def run_all_test_cases(forbidden_networks=()):
                 print(f"Image: {file_path.name}")
 
                 attacked = attack_non_console_main(folder_path.name, relative_file_path, n_epochs=100, print_debug=False)
+                if attacked:
+                    print()
+                    continue
                 verification = multiprocessing.Process(target=non_console_main, args=(folder_path.name, relative_file_path, 50, False))
                 verification.start()
 
-                TIMEOUT = 30
+                TIMEOUT = 60
                 verification.join(TIMEOUT)
 
                 if verification.is_alive():
@@ -113,7 +116,7 @@ if __name__ == "__main__":
     # non_console_main("conv_4", "../test_cases/conv_4/img8_mnist_0.2113.txt", print_debug=True, n_epochs=100)
     # non_console_main("fc_7", "../test_cases/fc_7/img7_mnist_0.0521.txt", print_debug=True, n_epochs=100)
     main()
-    # run_all_test_cases(forbidden_networks=("conv_1", ))
+    #run_all_test_cases()
 
     # end_time = time.time()
     # elapsed_time = end_time - start_time
