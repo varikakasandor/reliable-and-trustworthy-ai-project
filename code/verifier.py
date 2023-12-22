@@ -92,7 +92,7 @@ def run_all_test_cases(forbidden_networks=()):
                 verification = multiprocessing.Process(target=non_console_main, args=(folder_path.name, relative_file_path, 50, False))
                 verification.start()
 
-                TIMEOUT = 60
+                TIMEOUT = 30
                 verification.join(TIMEOUT)
 
                 if verification.is_alive():
@@ -108,12 +108,13 @@ def run_all_test_cases(forbidden_networks=()):
 
 
 if __name__ == "__main__":
-    start_time = time.time()
+    # start_time = time.time()
 
-    non_console_main("conv_4", "../test_cases/conv_4/img8_mnist_0.2113.txt", print_debug=True, n_epochs=100)
-    # main()
-    # run_all_test_cases(forbidden_networks=("fc_base", "fc_1", "fc_2", "fc_3", "fc_4", "fc_5", "fc_6", "fc_7", "conv_base", "conv_1", "conv_2", "conv_3"))
+    # non_console_main("conv_4", "../test_cases/conv_4/img8_mnist_0.2113.txt", print_debug=True, n_epochs=100)
+    # non_console_main("fc_7", "../test_cases/fc_7/img7_mnist_0.0521.txt", print_debug=True, n_epochs=100)
+    main()
+    # run_all_test_cases(forbidden_networks=("conv_1", ))
 
-    end_time = time.time()
-    elapsed_time = end_time - start_time
-    print(f"Total time elapsed: {elapsed_time} seconds")
+    # end_time = time.time()
+    # elapsed_time = end_time - start_time
+    # print(f"Total time elapsed: {elapsed_time} seconds")

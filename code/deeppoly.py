@@ -1,5 +1,5 @@
 from abstract_transformers import *
-# from torchviz import make_dot
+from torchviz import make_dot
 import torch
 from torch.optim.lr_scheduler import StepLR, ReduceLROnPlateau
 
@@ -135,7 +135,8 @@ class DeepPoly:
         scheduler = ReduceLROnPlateau(self.optimizer, mode='min', factor=0.5, patience=1)
 
         for epoch in range(n_epochs):
-            self.sum_diff = torch.sum(torch.relu(-self.transformers[-1].lb)) # TODO: find more sophisticated loss function
+            self.sum_diff = torch.sum(
+                torch.relu(-self.transformers[-1].lb))  # TODO: find more sophisticated loss function
             self.sum_diff.backward(retain_graph=True)
 
             self.optimizer.step()
@@ -156,7 +157,7 @@ class DeepPoly:
 
     def run(self, n_epochs=1000, backsub=True) -> bool:
 
-        self.backsub_depth = 0
+        self.backsub_depth = 0  # TODO: figure out why 0 doesn't work
         verified = self.first_run(backsub=backsub)
 
         if verified:

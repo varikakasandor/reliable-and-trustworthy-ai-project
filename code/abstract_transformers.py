@@ -73,8 +73,8 @@ class LinearTransformer(AbstractTransformer):
 
         super().__init__()
         self.module = module
-        self.weight = module.weight
-        self.bias = module.bias
+        self.weight = module.weight.detach().clone()
+        self.bias = module.bias.detach().clone()
         self.in_features = module.in_features
         self.out_features = module.out_features
 
@@ -132,7 +132,10 @@ class LinearTransformer(AbstractTransformer):
         if backsub_depth >= self.previous_transformer.depth:
             return self.previous_transformer, new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias
         else:
-            return self.previous_transformer.backward(new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias,
+            return self.previous_transformer.backward(new_ub_weights,
+                                                      new_lb_weights,
+                                                      new_ub_bias,
+                                                      new_lb_bias,
                                                       backsub_depth)
 
 
@@ -232,7 +235,10 @@ class ReLUTransformer(AbstractTransformer):
         if backsub_depth >= self.previous_transformer.depth:
             return self.previous_transformer, new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias
         else:
-            return self.previous_transformer.backward(new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias,
+            return self.previous_transformer.backward(new_ub_weights,
+                                                      new_lb_weights,
+                                                      new_ub_bias,
+                                                      new_lb_bias,
                                                       backsub_depth)
 
     def clamp_alphas(self):
@@ -339,7 +345,10 @@ class LeakyReLUTransformer(AbstractTransformer):
         if backsub_depth >= self.previous_transformer.depth:
             return self.previous_transformer, new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias
         else:
-            return self.previous_transformer.backward(new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias,
+            return self.previous_transformer.backward(new_ub_weights,
+                                                      new_lb_weights,
+                                                      new_ub_bias,
+                                                      new_lb_bias,
                                                       backsub_depth)
 
     def clamp_alphas(self):
@@ -361,8 +370,8 @@ class Conv2dTransformer(AbstractTransformer):
         # we only need to accommodate different kernel size, padding, and stride
         super().__init__()
         self.module = module
-        self.conv_weight = module.weight
-        self.conv_bias = module.bias
+        self.conv_weight = module.weight.detach().clone()
+        self.conv_bias = module.bias.detach().clone()
         self.in_channels = module.in_channels
         self.out_channels = module.out_channels
         self.kernel_size = module.kernel_size
@@ -457,5 +466,8 @@ class Conv2dTransformer(AbstractTransformer):
         if backsub_depth >= self.previous_transformer.depth:
             return self.previous_transformer, new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias
         else:
-            return self.previous_transformer.backward(new_ub_weights, new_lb_weights, new_ub_bias, new_lb_bias,
+            return self.previous_transformer.backward(new_ub_weights,
+                                                      new_lb_weights,
+                                                      new_ub_bias,
+                                                      new_lb_bias,
                                                       backsub_depth)
