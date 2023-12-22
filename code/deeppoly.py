@@ -127,7 +127,7 @@ class DeepPoly:
                 params.append(transformer.alphas)
 
         # Initialize the optimizer with an initial learning rate
-        initial_lr = 0.5
+        initial_lr = 1.0
         self.optimizer = torch.optim.Adam(params, lr=initial_lr)
 
         # Create a learning rate scheduler
